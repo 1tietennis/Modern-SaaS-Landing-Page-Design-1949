@@ -10,6 +10,9 @@ import OnboardingPage from './components/auth/OnboardingPage'
 import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
 import GetStarted from './pages/GetStarted'
+import Outreach from './pages/Outreach'
+import ClientPortalPage from './pages/ClientPortal'
+import Proposals from './pages/Proposals'
 import Contacts from './pages/Contacts'
 import Projects from './pages/Projects'
 import Todos from './pages/Todos'
@@ -25,6 +28,7 @@ import Automation from './pages/Automation'
 import Analytics from './pages/Analytics'
 import Settings from './pages/Settings'
 import AIAgent from './components/ai/AIAgent'
+import HelpHub from './components/help/HelpHub'
 import { questConfig } from './config/questConfig'
 
 function App() {
@@ -47,7 +51,7 @@ function App() {
           {/* Public Routes */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/onboarding" element={<OnboardingPage />} />
-          
+
           {/* Protected Routes */}
           <Route path="/*" element={
             <ProtectedRoute>
@@ -55,6 +59,9 @@ function App() {
                 <Routes>
                   <Route path="/" element={<Dashboard />} />
                   <Route path="/get-started" element={<GetStarted />} />
+                  <Route path="/outreach" element={<Outreach />} />
+                  <Route path="/client-portal" element={<ClientPortalPage />} />
+                  <Route path="/proposals" element={<Proposals />} />
                   <Route path="/contacts" element={<Contacts />} />
                   <Route path="/projects" element={<Projects />} />
                   <Route path="/todos" element={<Todos />} />
@@ -71,12 +78,14 @@ function App() {
                   <Route path="/settings" element={<Settings />} />
                 </Routes>
               </Layout>
+              {/* Help Hub - Only show when authenticated */}
+              <HelpHub />
             </ProtectedRoute>
           } />
         </Routes>
 
         {/* AI Agent - Only show when authenticated */}
-        <AIAgent
+        <AIAgent 
           isOpen={showAIAgent}
           onToggle={() => setShowAIAgent(!showAIAgent)}
           onLeadCapture={handleLeadCapture}

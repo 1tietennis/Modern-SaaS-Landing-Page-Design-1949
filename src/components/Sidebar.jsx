@@ -1,10 +1,10 @@
 import React from 'react'
-import {motion} from 'framer-motion'
-import {Link,useLocation} from 'react-router-dom'
+import { motion } from 'framer-motion'
+import { Link, useLocation } from 'react-router-dom'
 import SafeIcon from '../common/SafeIcon'
 import * as FiIcons from 'react-icons/fi'
 
-const {FiHome,FiTrendingUp,FiMail,FiZap,FiPackage,FiBarChart3,FiSettings,FiMenu,FiX,FiGlobe,FiCreditCard,FiUsers,FiTicket,FiPlay,FiUserPlus,FiFolder,FiCheckSquare,FiTarget,FiLayers} = FiIcons
+const { FiHome, FiTrendingUp, FiMail, FiZap, FiPackage, FiBarChart3, FiSettings, FiMenu, FiX, FiGlobe, FiCreditCard, FiUsers, FiTicket, FiPlay, FiUserPlus, FiFolder, FiCheckSquare, FiTarget, FiLayers, FiFileText, FiEdit3, FiSend } = FiIcons
 
 const Sidebar = ({ collapsed, onToggle }) => {
   const location = useLocation()
@@ -12,6 +12,9 @@ const Sidebar = ({ collapsed, onToggle }) => {
   const menuItems = [
     { path: '/', icon: FiHome, label: 'Dashboard', color: 'text-cyan-400' },
     { path: '/get-started', icon: FiPlay, label: 'Get Started', color: 'text-green-400' },
+    { path: '/outreach', icon: FiSend, label: 'B2B Outreach', color: 'text-purple-400' },
+    { path: '/client-portal', icon: FiUsers, label: 'Client Portal', color: 'text-blue-400' },
+    { path: '/proposals', icon: FiFileText, label: 'Proposals', color: 'text-purple-400' },
     { path: '/contacts', icon: FiUserPlus, label: 'Contact Manager', color: 'text-blue-400' },
     { path: '/projects', icon: FiFolder, label: 'Project Manager', color: 'text-purple-400' },
     { path: '/todos', icon: FiCheckSquare, label: 'Business To-Do', color: 'text-orange-400' },
@@ -66,8 +69,8 @@ const Sidebar = ({ collapsed, onToggle }) => {
                 <Link
                   to={item.path}
                   className={`flex items-center space-x-3 p-3 rounded-lg transition-all duration-200 group relative ${
-                    isActive
-                      ? 'bg-gradient-to-r from-cyan-500/20 to-purple-500/20 text-white'
+                    isActive 
+                      ? 'bg-gradient-to-r from-cyan-500/20 to-purple-500/20 text-white' 
                       : 'text-gray-400 hover:text-white hover:bg-gray-700'
                   }`}
                 >

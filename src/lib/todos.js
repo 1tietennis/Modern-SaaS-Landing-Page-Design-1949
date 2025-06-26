@@ -1,153 +1,160 @@
-// Business Todo Service
+// Business Todo Service with Supabase Integration
+import { supabaseService } from './supabaseService'
+
 export class TodoService {
   constructor() {
-    this.todos = this.loadTodos()
-  }
-
-  loadTodos() {
-    try {
-      const stored = localStorage.getItem('cyborgcrm_todos')
-      return stored ? JSON.parse(stored) : this.getDefaultTodos()
-    } catch (error) {
-      console.error('Error loading todos:', error)
-      return this.getDefaultTodos()
-    }
-  }
-
-  getDefaultTodos() {
-    return [
-      {
-        id: 1,
-        title: 'Review Q1 Marketing Budget',
-        description: 'Analyze spending and ROI for first quarter marketing campaigns',
-        priority: 'high',
-        category: 'finance',
-        dueDate: '2024-02-01',
-        assignedTo: 'John Doe',
-        estimatedHours: 3,
-        completed: false,
-        createdAt: new Date().toISOString()
-      },
-      {
-        id: 2,
-        title: 'Update Website Content',
-        description: 'Refresh homepage content and product descriptions',
-        priority: 'medium',
-        category: 'marketing',
-        dueDate: '2024-01-30',
-        assignedTo: 'Jane Smith',
-        estimatedHours: 5,
-        completed: false,
-        createdAt: new Date().toISOString()
-      },
-      {
-        id: 3,
-        title: 'Client Check-in Call',
-        description: 'Monthly check-in with TechCorp Inc to review progress',
-        priority: 'high',
-        category: 'sales',
-        dueDate: '2024-01-25',
-        assignedTo: 'Sarah Johnson',
-        estimatedHours: 1,
-        completed: true,
-        completedAt: '2024-01-24T14:30:00Z',
-        createdAt: new Date().toISOString()
-      }
-    ]
+    this.tableName = 'todos_crm2024'
   }
 
   async createTodo(todoData) {
-    const newTodo = {
-      id: Date.now(),
-      ...todoData,
-      completed: false,
-      createdAt: new Date().toISOString()
-    }
+    try {
+      const todo = await supabaseService.create(this.tableName, {
+        title: todoData.title,
+        description: todoData.description || '',
+        priority: todoData.priority || 'medium',
+        category: todoData.category || 'general',
+        due_date: todoData.dueDate || null,
+        assigned_to: todoData.assignedTo || '',
+        estimated_hours: todoData.estimatedHours || null,
+        completed: false
+      })
 
-    this.todos.unshift(newTodo)
-    this.saveTodos()
-    return newTodo
+      // Log activity
+      await supabaseService.logActivity(
+        'create',
+        'todo',
+        todo.id,
+        `Created task: ${todo.title}`,
+        { priority: todo.priority, category: todo.category }
+      )
+
+      return todo
+    } catch (error) {
+      console.error('Error creating todo:', error)
+      throw error
+    }
+  }
+
+  async getAllTodos() {
+    return await supabaseService.getAll(this.tableName)
   }
 
   async updateTodo(todoId, updates) {
-    const todoIndex = this.todos.findIndex(t => t.id === todoId)
-    if (todoIndex === -1) throw new Error('Todo not found')
+    try {
+      const todo = await supabaseService.update(this.tableName, todoId, updates)
 
-    this.todos[todoIndex] = {
-      ...this.todos[todoIndex],
-      ...updates,
-      updatedAt: new Date().toISOString()
+      // Log activity
+      await supabaseService.logActivity(
+        'update',
+        'todo',
+        todoId,
+        `Updated task: ${todo.title}`,
+        updates
+      )
+
+      return todo
+    } catch (error) {
+      console.error('Error updating todo:', error)
+      throw error
     }
-
-    this.saveTodos()
-    return this.todos[todoIndex]
   }
 
   async toggleComplete(todoId) {
-    const todo = this.todos.find(t => t.id === todoId)
-    if (!todo) throw new Error('Todo not found')
+    try {
+      const todo = await supabaseService.getById(this.tableName, todoId)
+      if (!todo) throw new Error('Todo not found')
 
-    todo.completed = !todo.completed
-    todo.completedAt = todo.completed ? new Date().toISOString() : null
-    todo.updatedAt = new Date().toISOString()
+      const updatedTodo = await supabaseService.update(this.tableName, todoId, {
+        completed: !todo.completed,
+        completed_at: !todo.completed ? new Date().toISOString() : null
+      })
 
-    this.saveTodos()
-    return todo
-  }
+      // Log activity
+      await supabaseService.logActivity(
+        'update',
+        'todo',
+        todoId,
+        `${updatedTodo.completed ? 'Completed' : 'Reopened'} task: ${todo.title}`,
+        { completed: updatedTodo.completed }
+      )
 
-  async deleteTodo(todoId) {
-    this.todos = this.todos.filter(t => t.id !== todoId)
-    this.saveTodos()
-    return true
-  }
-
-  getAllTodos() {
-    return this.todos.sort((a, b) => {
-      // Incomplete todos first, then by priority
-      if (a.completed !== b.completed) {
-        return a.completed ? 1 : -1
-      }
-      
-      const priorities = { urgent: 4, high: 3, medium: 2, low: 1 }
-      return priorities[b.priority] - priorities[a.priority]
-    })
-  }
-
-  getTodosByCategory(category) {
-    return this.todos.filter(t => t.category === category)
-  }
-
-  getTodosByAssignee(assignee) {
-    return this.todos.filter(t => t.assignedTo === assignee)
-  }
-
-  getOverdueTodos() {
-    const now = new Date()
-    return this.todos.filter(t => 
-      !t.completed && 
-      t.dueDate && 
-      new Date(t.dueDate) < now
-    )
-  }
-
-  getTodoStats() {
-    const total = this.todos.length
-    const completed = this.todos.filter(t => t.completed).length
-    const overdue = this.getOverdueTodos().length
-    const urgent = this.todos.filter(t => t.priority === 'urgent' && !t.completed).length
-
-    return {
-      total,
-      completed,
-      pending: total - completed,
-      overdue,
-      urgent,
-      completionRate: total > 0 ? Math.round((completed / total) * 100) : 0
+      return updatedTodo
+    } catch (error) {
+      console.error('Error toggling todo completion:', error)
+      throw error
     }
   }
 
-  saveTodos() {
-    localStorage.setItem('cyborgcrm_todos', JSON.stringify(this.todos))
+  async deleteTodo(todoId) {
+    try {
+      const todo = await supabaseService.getById(this.tableName, todoId)
+      await supabaseService.delete(this.tableName, todoId)
+
+      // Log activity
+      await supabaseService.logActivity(
+        'delete',
+        'todo',
+        todoId,
+        `Deleted task: ${todo?.title || 'Unknown'}`,
+        { todo_id: todoId }
+      )
+
+      return true
+    } catch (error) {
+      console.error('Error deleting todo:', error)
+      throw error
+    }
+  }
+
+  async getTodosByCategory(category) {
+    return await supabaseService.getAll(this.tableName, { category })
+  }
+
+  async getTodosByAssignee(assignee) {
+    try {
+      const todos = await this.getAllTodos()
+      return todos.filter(todo => todo.assigned_to === assignee)
+    } catch (error) {
+      console.error('Error getting todos by assignee:', error)
+      return []
+    }
+  }
+
+  async getOverdueTodos() {
+    try {
+      const todos = await this.getAllTodos()
+      const now = new Date()
+      return todos.filter(todo => 
+        !todo.completed && 
+        todo.due_date && 
+        new Date(todo.due_date) < now
+      )
+    } catch (error) {
+      console.error('Error getting overdue todos:', error)
+      return []
+    }
+  }
+
+  async getTodoStats() {
+    try {
+      const todos = await this.getAllTodos()
+      const total = todos.length
+      const completed = todos.filter(t => t.completed).length
+      const overdue = await this.getOverdueTodos()
+      const urgent = todos.filter(t => t.priority === 'urgent' && !t.completed).length
+
+      return {
+        total,
+        completed,
+        pending: total - completed,
+        overdue: overdue.length,
+        urgent,
+        completionRate: total > 0 ? Math.round((completed / total) * 100) : 0
+      }
+    } catch (error) {
+      console.error('Error getting todo stats:', error)
+      return { total: 0, completed: 0, pending: 0, overdue: 0, urgent: 0, completionRate: 0 }
+    }
   }
 }
 

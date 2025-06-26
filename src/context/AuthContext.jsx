@@ -47,12 +47,12 @@ export const AuthProvider = ({ children }) => {
     try {
       setIsAuthenticated(true);
       setUser(userData);
-      
+
       // Store authentication data
       localStorage.setItem('userId', userData.userId);
       localStorage.setItem('token', userData.token);
       localStorage.setItem('userData', JSON.stringify(userData));
-      
+
       console.log('User logged in:', userData);
     } catch (error) {
       console.error('Login error:', error);
@@ -63,12 +63,12 @@ export const AuthProvider = ({ children }) => {
     try {
       setIsAuthenticated(false);
       setUser(null);
-      
+
       // Clear authentication data
       localStorage.removeItem('userId');
       localStorage.removeItem('token');
       localStorage.removeItem('userData');
-      
+
       console.log('User logged out');
     } catch (error) {
       console.error('Logout error:', error);

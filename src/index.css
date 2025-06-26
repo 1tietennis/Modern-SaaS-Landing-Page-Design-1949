@@ -60,3 +60,16 @@ body {
     linear-gradient(90deg, rgba(0, 212, 255, 0.1) 1px, transparent 1px);
   background-size: 20px 20px;
 }
+
+/* Help Hub z-index override to ensure it appears above all other elements */
+.quest-help-hub,
+[data-quest-help-hub],
+.quest-help-widget {
+  z-index: 99999 !important;
+  position: fixed !important;
+}
+
+/* Ensure HelpHub appears above sidebar and navbar */
+.quest-help-hub {
+  z-index: 99999 !important;
+}

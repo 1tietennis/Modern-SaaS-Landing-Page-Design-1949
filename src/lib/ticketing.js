@@ -1,5 +1,7 @@
+// Ticketing Service with Supabase Integration
 import { format } from 'date-fns'
 import smsService from './sms'
+import { supabaseService } from './supabaseService'
 
 // Ticket Priority Levels
 export const TICKET_PRIORITY = {
@@ -31,87 +33,194 @@ export const TICKET_CATEGORY = {
 
 export class TicketingService {
   constructor() {
-    this.tickets = this.loadTickets()
-    this.ticketCounter = this.getNextTicketNumber()
+    this.tableName = 'support_tickets_crm2024'
+    this.notesTableName = 'ticket_notes_crm2024'
+    this.timelineTableName = 'ticket_timeline_crm2024'
   }
 
-  loadTickets() {
+  async getNextTicketNumber() {
     try {
-      const stored = localStorage.getItem('cyborgcrm_tickets')
-      return stored ? JSON.parse(stored) : []
+      // Get the highest ticket number from the database
+      const { data, error } = await supabaseService.supabase
+        .from(this.tableName)
+        .select('ticket_number')
+        .order('ticket_number', { ascending: false })
+        .limit(1)
+
+      if (error) throw error
+
+      const maxTicket = data[0]?.ticket_number || 100000
+      return maxTicket + 1
     } catch (error) {
-      console.error('Error loading tickets:', error)
-      return []
+      console.error('Error getting next ticket number:', error)
+      return Date.now() // Fallback to timestamp
     }
-  }
-
-  saveTickets() {
-    try {
-      localStorage.setItem('cyborgcrm_tickets', JSON.stringify(this.tickets))
-    } catch (error) {
-      console.error('Error saving tickets:', error)
-    }
-  }
-
-  getNextTicketNumber() {
-    const existingTickets = this.tickets
-    if (existingTickets.length === 0) {
-      return 100001
-    }
-    const maxTicket = Math.max(...existingTickets.map(t => parseInt(t.ticketNumber)))
-    return maxTicket + 1
-  }
-
-  generateTicketNumber() {
-    return this.ticketCounter++
   }
 
   async createTicket(ticketData) {
-    const ticketNumber = this.generateTicketNumber()
-    
-    const ticket = {
-      id: Date.now(),
-      ticketNumber: ticketNumber,
-      customerName: `${ticketData.firstName} ${ticketData.lastName}`,
-      email: ticketData.email,
-      phone: ticketData.phone || '',
-      company: ticketData.company || '',
-      subject: this.generateSubject(ticketData),
-      description: this.generateDescription(ticketData),
-      category: this.determineCategory(ticketData),
-      priority: this.determinePriority(ticketData),
-      status: TICKET_STATUS.OPEN,
-      source: ticketData.source || 'contact_form',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      assignedTo: null,
-      tags: this.generateTags(ticketData),
-      attachments: [],
-      notes: [],
-      timeline: [
-        {
-          id: Date.now(),
-          action: 'created',
-          description: 'Ticket created from customer inquiry',
-          timestamp: new Date().toISOString(),
-          user: 'System'
+    try {
+      const ticketNumber = await this.getNextTicketNumber()
+
+      const ticket = await supabaseService.create(this.tableName, {
+        ticket_number: ticketNumber,
+        customer_name: `${ticketData.firstName} ${ticketData.lastName}`,
+        email: ticketData.email,
+        phone: ticketData.phone || '',
+        company: ticketData.company || '',
+        subject: this.generateSubject(ticketData),
+        description: this.generateDescription(ticketData),
+        category: this.determineCategory(ticketData),
+        priority: this.determinePriority(ticketData),
+        status: TICKET_STATUS.OPEN,
+        source: ticketData.source || 'contact_form',
+        assigned_to: null,
+        tags: this.generateTags(ticketData),
+        custom_fields: {
+          service: ticketData.service,
+          budget: ticketData.budget,
+          lead_score: this.calculateLeadScore(ticketData),
+          follow_up_date: this.calculateFollowUpDate(ticketData)
         }
-      ],
-      customFields: {
-        service: ticketData.service,
-        budget: ticketData.budget,
-        leadScore: this.calculateLeadScore(ticketData),
-        followUpDate: this.calculateFollowUpDate(ticketData)
-      }
+      })
+
+      // Create initial timeline entry
+      await this.addTimelineEntry(ticket.id, 'created', 'Ticket created from customer inquiry', 'System')
+
+      // Send SMS notifications
+      await this.sendTicketNotifications(ticket)
+
+      // Log activity
+      await supabaseService.logActivity(
+        'create',
+        'ticket',
+        ticket.id,
+        `Created support ticket #${ticket.ticket_number}`,
+        { customer: ticket.customer_name, priority: ticket.priority }
+      )
+
+      return ticket
+    } catch (error) {
+      console.error('Error creating ticket:', error)
+      throw error
     }
+  }
 
-    this.tickets.push(ticket)
-    this.saveTickets()
+  async getAllTickets() {
+    return await supabaseService.getAll(this.tableName)
+  }
 
-    // Send SMS notifications
-    await this.sendTicketNotifications(ticket)
+  async getTicket(ticketNumber) {
+    try {
+      const { data, error } = await supabaseService.supabase
+        .from(this.tableName)
+        .select('*')
+        .eq('ticket_number', parseInt(ticketNumber))
+        .eq('user_id', supabaseService.userId)
+        .single()
 
-    return ticket
+      if (error) throw error
+      return data
+    } catch (error) {
+      console.error('Error fetching ticket:', error)
+      return null
+    }
+  }
+
+  async updateTicketStatus(ticketNumber, status, note = '') {
+    try {
+      const ticket = await this.getTicket(ticketNumber)
+      if (!ticket) return null
+
+      const updatedTicket = await supabaseService.update(this.tableName, ticket.id, {
+        status,
+        updated_at: new Date().toISOString()
+      })
+
+      // Add timeline entry
+      await this.addTimelineEntry(
+        ticket.id,
+        'status_changed',
+        `Status changed to ${status}${note ? ': ' + note : ''}`,
+        'System'
+      )
+
+      // Log activity
+      await supabaseService.logActivity(
+        'update',
+        'ticket',
+        ticket.id,
+        `Changed ticket #${ticket.ticket_number} status to ${status}`,
+        { status, note }
+      )
+
+      return updatedTicket
+    } catch (error) {
+      console.error('Error updating ticket status:', error)
+      throw error
+    }
+  }
+
+  async addTicketNote(ticketNumber, note, user = 'System', isInternal = false) {
+    try {
+      const ticket = await this.getTicket(ticketNumber)
+      if (!ticket) return null
+
+      const noteObj = await supabaseService.create(this.notesTableName, {
+        ticket_id: ticket.id,
+        content: note,
+        is_internal: isInternal
+      })
+
+      // Add timeline entry
+      await this.addTimelineEntry(
+        ticket.id,
+        'note_added',
+        `Note added by ${user}`,
+        user
+      )
+
+      return noteObj
+    } catch (error) {
+      console.error('Error adding ticket note:', error)
+      throw error
+    }
+  }
+
+  async addTimelineEntry(ticketId, action, description, userName, metadata = {}) {
+    try {
+      return await supabaseService.create(this.timelineTableName, {
+        ticket_id: ticketId,
+        action,
+        description,
+        user_name: userName,
+        metadata
+      })
+    } catch (error) {
+      console.error('Error adding timeline entry:', error)
+    }
+  }
+
+  async getTicketStats() {
+    try {
+      const tickets = await this.getAllTickets()
+      const total = tickets.length
+      const open = tickets.filter(t => t.status === TICKET_STATUS.OPEN).length
+      const inProgress = tickets.filter(t => t.status === TICKET_STATUS.IN_PROGRESS).length
+      const resolved = tickets.filter(t => t.status === TICKET_STATUS.RESOLVED).length
+      const urgent = tickets.filter(t => t.priority === TICKET_PRIORITY.URGENT).length
+
+      return {
+        total,
+        open,
+        inProgress,
+        resolved,
+        urgent,
+        avgLeadScore: tickets.reduce((sum, t) => sum + (t.custom_fields?.lead_score || 0), 0) / total || 0
+      }
+    } catch (error) {
+      console.error('Error getting ticket stats:', error)
+      return { total: 0, open: 0, inProgress: 0, resolved: 0, urgent: 0, avgLeadScore: 0 }
+    }
   }
 
   generateSubject(ticketData) {
@@ -123,36 +232,22 @@ export class TicketingService {
 
   generateDescription(ticketData) {
     let description = `Customer Inquiry Details:\n\n`
-    
     description += `Name: ${ticketData.firstName} ${ticketData.lastName}\n`
     description += `Email: ${ticketData.email}\n`
-    
     if (ticketData.phone) {
       description += `Phone: ${ticketData.phone}\n`
     }
-    
     if (ticketData.company) {
       description += `Company: ${ticketData.company}\n`
     }
-    
     if (ticketData.service) {
       description += `Service of Interest: ${ticketData.service}\n`
     }
-    
     if (ticketData.budget) {
       description += `Budget Range: ${ticketData.budget}\n`
     }
-    
     if (ticketData.message) {
       description += `\nMessage:\n${ticketData.message}\n`
-    }
-    
-    if (ticketData.challenge) {
-      description += `\nMarketing Challenge: ${ticketData.challenge}\n`
-    }
-    
-    if (ticketData.business) {
-      description += `Business Type: ${ticketData.business}\n`
     }
     
     description += `\nInquiry Date: ${format(new Date(), 'PPpp')}`
@@ -181,20 +276,21 @@ export class TicketingService {
     if (ticketData.budget === '25k-plus' || ticketData.budget === '10k-25k') {
       return TICKET_PRIORITY.HIGH
     }
-    
+
     // Enterprise services get higher priority
     if (ticketData.service && ticketData.service.includes('enterprise')) {
       return TICKET_PRIORITY.HIGH
     }
-    
+
     // Urgent keywords in message
-    if (ticketData.message && 
-        (ticketData.message.toLowerCase().includes('urgent') || 
-         ticketData.message.toLowerCase().includes('asap') ||
-         ticketData.message.toLowerCase().includes('emergency'))) {
+    if (ticketData.message && (
+      ticketData.message.toLowerCase().includes('urgent') ||
+      ticketData.message.toLowerCase().includes('asap') ||
+      ticketData.message.toLowerCase().includes('emergency')
+    )) {
       return TICKET_PRIORITY.URGENT
     }
-    
+
     return TICKET_PRIORITY.MEDIUM
   }
 
@@ -204,25 +300,22 @@ export class TicketingService {
     if (ticketData.service) {
       tags.push(ticketData.service.toLowerCase().replace(/\s+/g, '-'))
     }
-    
     if (ticketData.budget) {
       tags.push('budget-' + ticketData.budget)
     }
-    
     if (ticketData.company) {
       tags.push('has-company')
     }
-    
     if (ticketData.source) {
       tags.push('source-' + ticketData.source)
     }
-    
+
     return tags
   }
 
   calculateLeadScore(ticketData) {
     let score = 0
-    
+
     // Budget scoring
     if (ticketData.budget) {
       const budgetScores = {
@@ -234,7 +327,7 @@ export class TicketingService {
       }
       score += budgetScores[ticketData.budget] || 0
     }
-    
+
     // Service interest scoring
     if (ticketData.service) {
       if (ticketData.service.includes('full-package') || ticketData.service.includes('complete')) {
@@ -245,24 +338,24 @@ export class TicketingService {
         score += 20
       }
     }
-    
+
     // Company info bonus
     if (ticketData.company) {
       score += 15
     }
-    
+
     // Message detail bonus
     if (ticketData.message && ticketData.message.length > 100) {
       score += 10
     }
-    
+
     return Math.min(score, 100) // Cap at 100
   }
 
   calculateFollowUpDate(ticketData) {
     const now = new Date()
     const priority = this.determinePriority(ticketData)
-    
+
     switch (priority) {
       case TICKET_PRIORITY.URGENT:
         return new Date(now.getTime() + 2 * 60 * 60 * 1000) // 2 hours
@@ -280,95 +373,25 @@ export class TicketingService {
       // Send SMS notification
       if (ticket.priority === TICKET_PRIORITY.URGENT) {
         await smsService.notifyUrgentInquiry({
-          customerName: ticket.customerName,
+          customerName: ticket.customer_name,
           email: ticket.email,
           phone: ticket.phone,
           issue: ticket.subject,
-          ticketNumber: ticket.ticketNumber
+          ticketNumber: ticket.ticket_number
         })
       } else {
         await smsService.notifyNewTicket({
-          ticketNumber: ticket.ticketNumber,
-          customerName: ticket.customerName,
+          ticketNumber: ticket.ticket_number,
+          customerName: ticket.customer_name,
           priority: ticket.priority,
           subject: ticket.subject,
-          createdAt: ticket.createdAt
+          createdAt: ticket.created_at
         })
       }
 
-      console.log(`📱 SMS notifications sent for ticket #${ticket.ticketNumber}`)
+      console.log(`📱 SMS notifications sent for ticket #${ticket.ticket_number}`)
     } catch (error) {
       console.error('Error sending ticket notifications:', error)
-    }
-  }
-
-  getTicket(ticketNumber) {
-    return this.tickets.find(t => t.ticketNumber === parseInt(ticketNumber))
-  }
-
-  getAllTickets() {
-    return this.tickets.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-  }
-
-  updateTicketStatus(ticketNumber, status, note = '') {
-    const ticket = this.getTicket(ticketNumber)
-    if (!ticket) return null
-
-    ticket.status = status
-    ticket.updatedAt = new Date().toISOString()
-    
-    ticket.timeline.push({
-      id: Date.now(),
-      action: 'status_changed',
-      description: `Status changed to ${status}${note ? ': ' + note : ''}`,
-      timestamp: new Date().toISOString(),
-      user: 'System'
-    })
-
-    this.saveTickets()
-    return ticket
-  }
-
-  addTicketNote(ticketNumber, note, user = 'System') {
-    const ticket = this.getTicket(ticketNumber)
-    if (!ticket) return null
-
-    const noteObj = {
-      id: Date.now(),
-      content: note,
-      user: user,
-      timestamp: new Date().toISOString()
-    }
-
-    ticket.notes.push(noteObj)
-    ticket.updatedAt = new Date().toISOString()
-    
-    ticket.timeline.push({
-      id: Date.now(),
-      action: 'note_added',
-      description: `Note added by ${user}`,
-      timestamp: new Date().toISOString(),
-      user: user
-    })
-
-    this.saveTickets()
-    return ticket
-  }
-
-  getTicketStats() {
-    const total = this.tickets.length
-    const open = this.tickets.filter(t => t.status === TICKET_STATUS.OPEN).length
-    const inProgress = this.tickets.filter(t => t.status === TICKET_STATUS.IN_PROGRESS).length
-    const resolved = this.tickets.filter(t => t.status === TICKET_STATUS.RESOLVED).length
-    const urgent = this.tickets.filter(t => t.priority === TICKET_PRIORITY.URGENT).length
-    
-    return {
-      total,
-      open,
-      inProgress,
-      resolved,
-      urgent,
-      avgLeadScore: this.tickets.reduce((sum, t) => sum + (t.customFields.leadScore || 0), 0) / total || 0
     }
   }
 }

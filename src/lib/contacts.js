@@ -1,118 +1,132 @@
-// Contact Management Service
+// Contact Management Service with Supabase Integration
+import { supabaseService } from './supabaseService'
+
 export class ContactService {
   constructor() {
-    this.contacts = this.loadContacts()
-  }
-
-  loadContacts() {
-    try {
-      const stored = localStorage.getItem('cyborgcrm_contacts')
-      return stored ? JSON.parse(stored) : this.getDefaultContacts()
-    } catch (error) {
-      console.error('Error loading contacts:', error)
-      return this.getDefaultContacts()
-    }
-  }
-
-  getDefaultContacts() {
-    return [
-      {
-        id: 1,
-        name: 'Sarah Johnson',
-        email: 'sarah@techcorp.com',
-        phone: '+1 (555) 123-4567',
-        company: 'TechCorp Inc',
-        position: 'CEO',
-        tags: ['lead', 'high-value'],
-        priority: 'high',
-        notes: 'Interested in enterprise package. Follow up next week.',
-        createdAt: new Date().toISOString(),
-        lastContact: new Date().toISOString()
-      },
-      {
-        id: 2,
-        name: 'Mike Chen',
-        email: 'mike@dataflow.com',
-        phone: '+1 (555) 234-5678',
-        company: 'DataFlow Solutions',
-        position: 'CTO',
-        tags: ['customer', 'technical'],
-        priority: 'medium',
-        notes: 'Current customer, looking to expand services.',
-        createdAt: new Date().toISOString(),
-        lastContact: new Date().toISOString()
-      }
-    ]
+    this.tableName = 'contacts_crm2024'
   }
 
   async createContact(contactData) {
-    const newContact = {
-      id: Date.now(),
-      ...contactData,
-      tags: contactData.tags || [],
-      createdAt: new Date().toISOString(),
-      lastContact: new Date().toISOString()
-    }
+    try {
+      const contact = await supabaseService.create(this.tableName, {
+        name: contactData.name,
+        email: contactData.email,
+        phone: contactData.phone || '',
+        company: contactData.company || '',
+        position: contactData.position || '',
+        tags: contactData.tags || [],
+        priority: contactData.priority || 'medium',
+        notes: contactData.notes || '',
+        lead_score: this.calculateLeadScore(contactData),
+        last_contact: new Date().toISOString(),
+        source: contactData.source || 'manual',
+        status: 'active'
+      })
 
-    this.contacts.unshift(newContact)
-    this.saveContacts()
-    return newContact
+      // Log activity
+      await supabaseService.logActivity(
+        'create',
+        'contact',
+        contact.id,
+        `Created contact: ${contact.name}`,
+        { email: contact.email, company: contact.company }
+      )
+
+      return contact
+    } catch (error) {
+      console.error('Error creating contact:', error)
+      throw error
+    }
+  }
+
+  async getAllContacts() {
+    return await supabaseService.getAll(this.tableName)
   }
 
   async updateContact(contactId, updates) {
-    const contactIndex = this.contacts.findIndex(c => c.id === contactId)
-    if (contactIndex === -1) throw new Error('Contact not found')
+    try {
+      const contact = await supabaseService.update(this.tableName, contactId, {
+        ...updates,
+        lead_score: updates.lead_score || this.calculateLeadScore(updates)
+      })
 
-    this.contacts[contactIndex] = {
-      ...this.contacts[contactIndex],
-      ...updates,
-      updatedAt: new Date().toISOString()
+      // Log activity
+      await supabaseService.logActivity(
+        'update',
+        'contact',
+        contactId,
+        `Updated contact: ${contact.name}`,
+        updates
+      )
+
+      return contact
+    } catch (error) {
+      console.error('Error updating contact:', error)
+      throw error
     }
-
-    this.saveContacts()
-    return this.contacts[contactIndex]
   }
 
   async deleteContact(contactId) {
-    this.contacts = this.contacts.filter(c => c.id !== contactId)
-    this.saveContacts()
-    return true
-  }
+    try {
+      const contact = await supabaseService.getById(this.tableName, contactId)
+      await supabaseService.delete(this.tableName, contactId)
 
-  getAllContacts() {
-    return this.contacts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-  }
+      // Log activity
+      await supabaseService.logActivity(
+        'delete',
+        'contact',
+        contactId,
+        `Deleted contact: ${contact?.name || 'Unknown'}`,
+        { contact_id: contactId }
+      )
 
-  searchContacts(query) {
-    return this.contacts.filter(contact =>
-      contact.name.toLowerCase().includes(query.toLowerCase()) ||
-      contact.email.toLowerCase().includes(query.toLowerCase()) ||
-      contact.company.toLowerCase().includes(query.toLowerCase())
-    )
-  }
-
-  getContactsByTag(tag) {
-    return this.contacts.filter(contact => contact.tags.includes(tag))
-  }
-
-  addTag(contactId, tag) {
-    const contact = this.contacts.find(c => c.id === contactId)
-    if (contact && !contact.tags.includes(tag)) {
-      contact.tags.push(tag)
-      this.saveContacts()
+      return true
+    } catch (error) {
+      console.error('Error deleting contact:', error)
+      throw error
     }
   }
 
-  removeTag(contactId, tag) {
-    const contact = this.contacts.find(c => c.id === contactId)
-    if (contact) {
-      contact.tags = contact.tags.filter(t => t !== tag)
-      this.saveContacts()
+  async searchContacts(query) {
+    try {
+      const contacts = await this.getAllContacts()
+      return contacts.filter(contact =>
+        contact.name.toLowerCase().includes(query.toLowerCase()) ||
+        contact.email.toLowerCase().includes(query.toLowerCase()) ||
+        contact.company.toLowerCase().includes(query.toLowerCase())
+      )
+    } catch (error) {
+      console.error('Error searching contacts:', error)
+      return []
     }
   }
 
-  saveContacts() {
-    localStorage.setItem('cyborgcrm_contacts', JSON.stringify(this.contacts))
+  calculateLeadScore(contactData) {
+    let score = 0
+    
+    // Email domain scoring
+    if (contactData.email) {
+      const domain = contactData.email.split('@')[1]
+      if (domain && !['gmail.com', 'yahoo.com', 'hotmail.com'].includes(domain)) {
+        score += 20 // Business email
+      }
+    }
+
+    // Company presence
+    if (contactData.company) score += 25
+
+    // Phone number
+    if (contactData.phone) score += 15
+
+    // Position/title
+    if (contactData.position) {
+      const title = contactData.position.toLowerCase()
+      if (title.includes('ceo') || title.includes('founder')) score += 30
+      else if (title.includes('manager') || title.includes('director')) score += 20
+      else score += 10
+    }
+
+    return Math.min(score, 100)
   }
 }
 

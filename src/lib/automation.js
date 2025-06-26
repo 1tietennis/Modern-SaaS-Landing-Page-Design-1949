@@ -1,123 +1,181 @@
-// Automation Service
+// Automation Service with Supabase Integration
+import { supabaseService } from './supabaseService'
+
 export class AutomationService {
   constructor() {
-    this.workflows = this.loadWorkflows()
-    this.templates = this.loadTemplates()
-    this.responses = this.loadResponses()
+    this.workflowsTableName = 'automation_workflows_crm2024'
+    this.templatesTableName = 'email_templates_crm2024'
   }
 
-  loadWorkflows() {
+  async getWorkflows() {
+    return await supabaseService.getAll(this.workflowsTableName)
+  }
+
+  async createWorkflow(workflowData) {
     try {
-      const stored = localStorage.getItem('cyborgcrm_workflows')
-      return stored ? JSON.parse(stored) : this.getDefaultWorkflows()
+      const workflow = await supabaseService.create(this.workflowsTableName, {
+        name: workflowData.name,
+        description: workflowData.description || '',
+        trigger_type: workflowData.trigger || 'new_lead',
+        conditions: workflowData.conditions || [],
+        actions: workflowData.actions || [],
+        delay_minutes: workflowData.delay || 0,
+        active: workflowData.active || false,
+        stats: { triggered: 0, completed: 0, conversion_rate: 0 }
+      })
+
+      // Log activity
+      await supabaseService.logActivity(
+        'create',
+        'workflow',
+        workflow.id,
+        `Created automation workflow: ${workflow.name}`,
+        { trigger: workflow.trigger_type, active: workflow.active }
+      )
+
+      return workflow
     } catch (error) {
-      console.error('Error loading workflows:', error)
-      return this.getDefaultWorkflows()
+      console.error('Error creating workflow:', error)
+      throw error
     }
   }
 
-  loadTemplates() {
-    return [
-      // Email Templates
-      {
-        id: 1,
-        name: 'Welcome Email',
-        type: 'email',
-        subject: 'Welcome to CyborgCRM! 🚀',
-        content: `Hi {{firstName}},
+  async updateWorkflow(workflowId, updates) {
+    try {
+      const workflow = await supabaseService.update(this.workflowsTableName, workflowId, updates)
 
-Welcome to CyborgCRM! We're thrilled to have you on board.
+      // Log activity
+      await supabaseService.logActivity(
+        'update',
+        'workflow',
+        workflowId,
+        `Updated automation workflow: ${workflow.name}`,
+        updates
+      )
 
-Our team will be in touch within 24 hours to help you get started with your digital marketing strategy.
-
-In the meantime, feel free to explore our resources:
-- Marketing Strategy Guide
-- Free SEO Audit Tool
-- Client Success Stories
-
-Best regards,
-The CyborgCRM Team`,
-        preview: 'Welcome new customers with personalized messaging',
-        active: true,
-        usage: 127
-      },
-      {
-        id: 2,
-        name: 'Follow-up Email',
-        type: 'email',
-        subject: 'Quick follow-up on your inquiry',
-        content: `Hi {{firstName}},
-
-I wanted to follow up on your recent inquiry about our {{service}} services.
-
-Based on your needs, I believe our {{recommendedPackage}} package would be perfect for {{companyName}}.
-
-Would you be available for a 15-minute call this week to discuss how we can help you achieve your marketing goals?
-
-Best regards,
-{{salesRepName}}`,
-        preview: 'Automated follow-up for sales inquiries',
-        active: true,
-        usage: 89
-      },
-      {
-        id: 3,
-        name: 'Proposal Ready',
-        type: 'email',
-        subject: 'Your custom marketing proposal is ready! 📊',
-        content: `Hi {{firstName}},
-
-Great news! Your custom marketing proposal is ready for review.
-
-We've analyzed your business needs and created a comprehensive strategy that includes:
-✓ {{service1}}
-✓ {{service2}}
-✓ {{service3}}
-
-The proposal includes detailed timelines, expected ROI, and transparent pricing.
-
-Click here to review your proposal: {{proposalLink}}
-
-Let's schedule a call to discuss the next steps!
-
-Best regards,
-{{salesRepName}}`,
-        preview: 'Notify when custom proposals are ready',
-        active: true,
-        usage: 156
-      },
-      // SMS Templates
-      {
-        id: 4,
-        name: 'Lead Notification',
-        type: 'sms',
-        content: '🚨 NEW LEAD: {{firstName}} {{lastName}} from {{companyName}} is interested in {{service}}. Ticket #{{ticketNumber}} created. Respond within 1 hour for best results!',
-        preview: 'Instant SMS alerts for new leads',
-        active: true,
-        usage: 234
-      },
-      {
-        id: 5,
-        name: 'Appointment Reminder',
-        type: 'sms',
-        content: 'Hi {{firstName}}! Reminder: Your consultation call with {{salesRep}} is tomorrow at {{time}}. Reply CONFIRM to confirm or RESCHEDULE if you need to change. - CyborgCRM',
-        preview: 'Appointment reminders via SMS',
-        active: true,
-        usage: 178
-      },
-      {
-        id: 6,
-        name: 'Quick Response',
-        type: 'sms',
-        content: 'Thanks for your interest in CyborgCRM! We received your inquiry and will respond within 2 hours. For urgent matters, call (555) 123-4567. - Team CyborgCRM',
-        preview: 'Quick acknowledgment of inquiries',
-        active: true,
-        usage: 445
-      }
-    ]
+      return workflow
+    } catch (error) {
+      console.error('Error updating workflow:', error)
+      throw error
+    }
   }
 
-  loadResponses() {
+  async toggleWorkflow(workflowId, active) {
+    try {
+      const workflow = await supabaseService.update(this.workflowsTableName, workflowId, { active })
+
+      // Log activity
+      await supabaseService.logActivity(
+        'update',
+        'workflow',
+        workflowId,
+        `${active ? 'Activated' : 'Deactivated'} workflow: ${workflow.name}`,
+        { active }
+      )
+
+      return workflow
+    } catch (error) {
+      console.error('Error toggling workflow:', error)
+      throw error
+    }
+  }
+
+  async deleteWorkflow(workflowId) {
+    try {
+      const workflow = await supabaseService.getById(this.workflowsTableName, workflowId)
+      await supabaseService.delete(this.workflowsTableName, workflowId)
+
+      // Log activity
+      await supabaseService.logActivity(
+        'delete',
+        'workflow',
+        workflowId,
+        `Deleted workflow: ${workflow?.name || 'Unknown'}`,
+        { workflow_id: workflowId }
+      )
+
+      return true
+    } catch (error) {
+      console.error('Error deleting workflow:', error)
+      throw error
+    }
+  }
+
+  async getTemplates() {
+    return await supabaseService.getAll(this.templatesTableName)
+  }
+
+  async createTemplate(templateData) {
+    try {
+      const template = await supabaseService.create(this.templatesTableName, {
+        name: templateData.name,
+        type: templateData.type || 'email',
+        subject: templateData.subject || '',
+        content: templateData.content,
+        variables: templateData.variables || {},
+        active: templateData.active !== false,
+        usage_count: 0
+      })
+
+      // Log activity
+      await supabaseService.logActivity(
+        'create',
+        'template',
+        template.id,
+        `Created ${template.type} template: ${template.name}`,
+        { type: template.type }
+      )
+
+      return template
+    } catch (error) {
+      console.error('Error creating template:', error)
+      throw error
+    }
+  }
+
+  async updateTemplate(templateId, updates) {
+    try {
+      const template = await supabaseService.update(this.templatesTableName, templateId, updates)
+
+      // Log activity
+      await supabaseService.logActivity(
+        'update',
+        'template',
+        templateId,
+        `Updated template: ${template.name}`,
+        updates
+      )
+
+      return template
+    } catch (error) {
+      console.error('Error updating template:', error)
+      throw error
+    }
+  }
+
+  async deleteTemplate(templateId) {
+    try {
+      const template = await supabaseService.getById(this.templatesTableName, templateId)
+      await supabaseService.delete(this.templatesTableName, templateId)
+
+      // Log activity
+      await supabaseService.logActivity(
+        'delete',
+        'template',
+        templateId,
+        `Deleted template: ${template?.name || 'Unknown'}`,
+        { template_id: templateId }
+      )
+
+      return true
+    } catch (error) {
+      console.error('Error deleting template:', error)
+      throw error
+    }
+  }
+
+  // Mock responses for UI compatibility
+  getResponses() {
     return [
       {
         id: 1,
@@ -126,247 +184,90 @@ Best regards,
         subject: 'We received your message',
         content: 'Thank you for contacting CyborgCRM. We received your message and will respond within 2 hours during business hours.',
         active: true
-      },
-      {
-        id: 2,
-        trigger: 'after_hours',
-        type: 'email',
-        subject: 'Thanks for your message - we\'ll respond soon',
-        content: 'Thank you for contacting CyborgCRM. Our office is currently closed, but we\'ll respond first thing in the morning.',
-        active: true
-      },
-      {
-        id: 3,
-        trigger: 'weekend',
-        type: 'sms',
-        content: 'Thanks for your message! Our team will respond on Monday morning. For urgent matters, call (555) 123-4567.',
-        active: false
       }
     ]
   }
 
-  getDefaultWorkflows() {
-    return [
-      {
-        id: 1,
-        name: 'New Lead Nurturing',
-        description: 'Automatically nurture new leads with educational content and follow-ups',
-        trigger: 'new_lead',
-        conditions: [
-          { field: 'leadSource', operator: 'equals', value: 'website' },
-          { field: 'leadScore', operator: 'greater_than', value: 50 }
-        ],
-        actions: [
-          { type: 'send_email', template: 'welcome_email', delay: 0 },
-          { type: 'send_sms', template: 'welcome_sms', delay: 5 },
-          { type: 'add_to_crm', delay: 0 },
-          { type: 'assign_sales_rep', delay: 0 },
-          { type: 'schedule_followup', delay: 1440 } // 24 hours
-        ],
-        delay: 0,
-        active: true,
-        stats: {
-          triggered: 156,
-          completed: 142,
-          conversionRate: 23
-        },
-        createdAt: new Date().toISOString()
-      },
-      {
-        id: 2,
-        name: 'Abandoned Form Recovery',
-        description: 'Re-engage users who started but didn\'t complete contact forms',
-        trigger: 'form_abandoned',
-        conditions: [
-          { field: 'timeOnPage', operator: 'greater_than', value: 30 },
-          { field: 'fieldsCompleted', operator: 'greater_than', value: 2 }
-        ],
-        actions: [
-          { type: 'send_email', template: 'abandoned_form', delay: 60 },
-          { type: 'show_exit_intent', delay: 0 },
-          { type: 'retarget_ads', delay: 120 }
-        ],
-        delay: 60,
-        active: true,
-        stats: {
-          triggered: 89,
-          completed: 67,
-          conversionRate: 18
-        },
-        createdAt: new Date().toISOString()
-      },
-      {
-        id: 3,
-        name: 'Customer Onboarding',
-        description: 'Guide new customers through the onboarding process',
-        trigger: 'new_customer',
-        conditions: [
-          { field: 'packageType', operator: 'not_equals', value: 'trial' }
-        ],
-        actions: [
-          { type: 'send_email', template: 'onboarding_welcome', delay: 0 },
-          { type: 'create_project', delay: 0 },
-          { type: 'schedule_kickoff', delay: 1440 },
-          { type: 'send_resources', delay: 2880 }
-        ],
-        delay: 0,
-        active: true,
-        stats: {
-          triggered: 45,
-          completed: 43,
-          conversionRate: 95
-        },
-        createdAt: new Date().toISOString()
-      },
-      {
-        id: 4,
-        name: 'Re-engagement Campaign',
-        description: 'Win back inactive leads and customers',
-        trigger: 'inactive_contact',
-        conditions: [
-          { field: 'lastActivity', operator: 'older_than', value: '30_days' },
-          { field: 'leadScore', operator: 'greater_than', value: 30 }
-        ],
-        actions: [
-          { type: 'send_email', template: 'reengagement', delay: 0 },
-          { type: 'offer_consultation', delay: 1440 },
-          { type: 'send_case_study', delay: 4320 }
-        ],
-        delay: 0,
-        active: false,
-        stats: {
-          triggered: 78,
-          completed: 34,
-          conversionRate: 12
-        },
-        createdAt: new Date().toISOString()
+  async getWorkflowStats() {
+    try {
+      const workflows = await this.getWorkflows()
+      return {
+        total: workflows.length,
+        active: workflows.filter(w => w.active).length,
+        totalTriggered: workflows.reduce((sum, w) => sum + (w.stats?.triggered || 0), 0),
+        totalCompleted: workflows.reduce((sum, w) => sum + (w.stats?.completed || 0), 0),
+        averageConversion: workflows.length > 0
+          ? Math.round(workflows.reduce((sum, w) => sum + (w.stats?.conversion_rate || 0), 0) / workflows.length)
+          : 0
       }
-    ]
-  }
-
-  async createWorkflow(workflowData) {
-    const newWorkflow = {
-      id: Date.now(),
-      ...workflowData,
-      stats: {
-        triggered: 0,
-        completed: 0,
-        conversionRate: 0
-      },
-      createdAt: new Date().toISOString()
+    } catch (error) {
+      console.error('Error getting workflow stats:', error)
+      return { total: 0, active: 0, totalTriggered: 0, totalCompleted: 0, averageConversion: 0 }
     }
-
-    this.workflows.unshift(newWorkflow)
-    this.saveWorkflows()
-    return newWorkflow
-  }
-
-  async updateWorkflow(workflowId, updates) {
-    const workflowIndex = this.workflows.findIndex(w => w.id === workflowId)
-    if (workflowIndex === -1) throw new Error('Workflow not found')
-
-    this.workflows[workflowIndex] = {
-      ...this.workflows[workflowIndex],
-      ...updates,
-      updatedAt: new Date().toISOString()
-    }
-
-    this.saveWorkflows()
-    return this.workflows[workflowIndex]
-  }
-
-  async toggleWorkflow(workflowId, active) {
-    const workflow = this.workflows.find(w => w.id === workflowId)
-    if (!workflow) throw new Error('Workflow not found')
-
-    workflow.active = active
-    workflow.updatedAt = new Date().toISOString()
-
-    this.saveWorkflows()
-    return workflow
-  }
-
-  async deleteWorkflow(workflowId) {
-    this.workflows = this.workflows.filter(w => w.id !== workflowId)
-    this.saveWorkflows()
-    return true
   }
 
   // Email automation methods
   async sendAutomatedEmail(templateId, recipientData) {
-    const template = this.templates.find(t => t.id === templateId && t.type === 'email')
-    if (!template) throw new Error('Email template not found')
+    try {
+      const template = await supabaseService.getById(this.templatesTableName, templateId)
+      if (!template || template.type !== 'email') {
+        throw new Error('Email template not found')
+      }
 
-    // Replace variables in template
-    let content = template.content
-    let subject = template.subject
+      // Replace variables in template
+      let content = template.content
+      let subject = template.subject
 
-    Object.entries(recipientData).forEach(([key, value]) => {
-      const regex = new RegExp(`{{${key}}}`, 'g')
-      content = content.replace(regex, value)
-      subject = subject.replace(regex, value)
-    })
+      Object.entries(recipientData).forEach(([key, value]) => {
+        const regex = new RegExp(`{{${key}}}`, 'g')
+        content = content.replace(regex, value)
+        subject = subject.replace(regex, value)
+      })
 
-    console.log('Sending automated email:', {
-      to: recipientData.email,
-      subject,
-      content,
-      templateId
-    })
+      console.log('Sending automated email:', {
+        to: recipientData.email,
+        subject,
+        content,
+        templateId
+      })
 
-    // In production, integrate with email service (SendGrid, Mailgun, etc.)
-    return {
-      success: true,
-      messageId: `email_${Date.now()}`,
-      templateUsed: template.name
-    }
-  }
+      // Update usage count
+      await supabaseService.update(this.templatesTableName, templateId, {
+        usage_count: (template.usage_count || 0) + 1
+      })
 
-  // SMS automation methods
-  async sendAutomatedSMS(templateId, recipientData) {
-    const template = this.templates.find(t => t.id === templateId && t.type === 'sms')
-    if (!template) throw new Error('SMS template not found')
-
-    // Replace variables in template
-    let content = template.content
-
-    Object.entries(recipientData).forEach(([key, value]) => {
-      const regex = new RegExp(`{{${key}}}`, 'g')
-      content = content.replace(regex, value)
-    })
-
-    console.log('Sending automated SMS:', {
-      to: recipientData.phone,
-      content,
-      templateId
-    })
-
-    // In production, integrate with SMS service (Twilio, etc.)
-    return {
-      success: true,
-      messageId: `sms_${Date.now()}`,
-      templateUsed: template.name
+      return {
+        success: true,
+        messageId: `email_${Date.now()}`,
+        templateUsed: template.name
+      }
+    } catch (error) {
+      console.error('Error sending automated email:', error)
+      throw error
     }
   }
 
   // Trigger workflow execution
   async triggerWorkflow(triggerType, data) {
-    const activeWorkflows = this.workflows.filter(w => 
-      w.active && w.trigger === triggerType
-    )
+    try {
+      const workflows = await this.getWorkflows()
+      const activeWorkflows = workflows.filter(w => w.active && w.trigger_type === triggerType)
 
-    for (const workflow of activeWorkflows) {
-      // Check conditions
-      if (this.evaluateConditions(workflow.conditions, data)) {
-        await this.executeWorkflow(workflow, data)
+      for (const workflow of activeWorkflows) {
+        if (this.evaluateConditions(workflow.conditions, data)) {
+          await this.executeWorkflow(workflow, data)
+        }
       }
+    } catch (error) {
+      console.error('Error triggering workflows:', error)
     }
   }
 
   evaluateConditions(conditions, data) {
+    if (!conditions || conditions.length === 0) return true
+
     return conditions.every(condition => {
       const value = data[condition.field]
-      
       switch (condition.operator) {
         case 'equals':
           return value === condition.value
@@ -378,11 +279,6 @@ Best regards,
           return Number(value) < Number(condition.value)
         case 'contains':
           return String(value).toLowerCase().includes(String(condition.value).toLowerCase())
-        case 'older_than':
-          // Handle date comparisons
-          const daysAgo = parseInt(condition.value.replace('_days', ''))
-          const cutoffDate = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000)
-          return new Date(value) < cutoffDate
         default:
           return true
       }
@@ -390,25 +286,39 @@ Best regards,
   }
 
   async executeWorkflow(workflow, data) {
-    console.log(`Executing workflow: ${workflow.name}`, data)
+    try {
+      console.log(`Executing workflow: ${workflow.name}`, data)
 
-    // Update stats
-    workflow.stats.triggered++
-
-    for (const action of workflow.actions) {
-      try {
-        await this.executeAction(action, data)
-      } catch (error) {
-        console.error(`Error executing action in workflow ${workflow.name}:`, error)
+      // Update stats
+      const newStats = {
+        ...workflow.stats,
+        triggered: (workflow.stats.triggered || 0) + 1
       }
+
+      for (const action of workflow.actions) {
+        try {
+          await this.executeAction(action, data)
+        } catch (error) {
+          console.error(`Error executing action in workflow ${workflow.name}:`, error)
+        }
+      }
+
+      newStats.completed = (workflow.stats.completed || 0) + 1
+      newStats.conversion_rate = Math.round((newStats.completed / newStats.triggered) * 100)
+
+      await supabaseService.update(this.workflowsTableName, workflow.id, { stats: newStats })
+
+      // Log activity
+      await supabaseService.logActivity(
+        'execute',
+        'workflow',
+        workflow.id,
+        `Executed workflow: ${workflow.name}`,
+        { trigger_data: data, stats: newStats }
+      )
+    } catch (error) {
+      console.error('Error executing workflow:', error)
     }
-
-    workflow.stats.completed++
-    workflow.stats.conversionRate = Math.round(
-      (workflow.stats.completed / workflow.stats.triggered) * 100
-    )
-
-    this.saveWorkflows()
   }
 
   async executeAction(action, data) {
@@ -422,68 +332,15 @@ Best regards,
           await this.sendAutomatedEmail(action.template, data)
         }
         break
-
       case 'send_sms':
-        if (action.delay > 0) {
-          setTimeout(() => {
-            this.sendAutomatedSMS(action.template, data)
-          }, action.delay * 60 * 1000)
-        } else {
-          await this.sendAutomatedSMS(action.template, data)
-        }
+        console.log('Sending SMS:', data)
         break
-
       case 'add_to_crm':
         console.log('Adding to CRM:', data)
-        // Integrate with CRM system
         break
-
-      case 'assign_sales_rep':
-        console.log('Assigning sales rep:', data)
-        // Assign to sales representative
-        break
-
-      case 'schedule_followup':
-        console.log('Scheduling follow-up:', data)
-        // Create follow-up task
-        break
-
-      case 'create_project':
-        console.log('Creating project:', data)
-        // Create new project
-        break
-
       default:
         console.log('Unknown action type:', action.type)
     }
-  }
-
-  getWorkflows() {
-    return this.workflows.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-  }
-
-  getTemplates() {
-    return this.templates
-  }
-
-  getResponses() {
-    return this.responses
-  }
-
-  getWorkflowStats() {
-    return {
-      total: this.workflows.length,
-      active: this.workflows.filter(w => w.active).length,
-      totalTriggered: this.workflows.reduce((sum, w) => sum + w.stats.triggered, 0),
-      totalCompleted: this.workflows.reduce((sum, w) => sum + w.stats.completed, 0),
-      averageConversion: Math.round(
-        this.workflows.reduce((sum, w) => sum + w.stats.conversionRate, 0) / this.workflows.length
-      )
-    }
-  }
-
-  saveWorkflows() {
-    localStorage.setItem('cyborgcrm_workflows', JSON.stringify(this.workflows))
   }
 }
 

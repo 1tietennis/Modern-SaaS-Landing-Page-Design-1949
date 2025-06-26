@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { QuestLogin } from '@questlabs/react-sdk';
@@ -13,8 +13,46 @@ const LoginPage = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
 
+  // Auto-signin configuration
+  const AUTO_SIGNIN_CONFIG = {
+    enabled: true, // Set to false to disable auto-signin
+    email: 'demo@cyborgcrm.com',
+    password: 'demo123'
+  };
+
+  useEffect(() => {
+    // Auto-signin after component mounts
+    if (AUTO_SIGNIN_CONFIG.enabled) {
+      const timer = setTimeout(() => {
+        handleAutoSignin();
+      }, 1000); // 1 second delay to show the page briefly
+
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
+  const handleAutoSignin = () => {
+    // Simulate successful login with auto-signin credentials
+    const userData = {
+      userId: questConfig.USER_ID,
+      token: questConfig.TOKEN,
+      email: AUTO_SIGNIN_CONFIG.email,
+      newUser: false,
+      loginTime: new Date().toISOString(),
+      autoSignin: true
+    };
+
+    console.log('Auto-signin successful:', userData);
+    
+    // Update auth context
+    login(userData);
+    
+    // Navigate to dashboard
+    navigate('/');
+  };
+
   const handleLogin = ({ userId, token, newUser }) => {
-    console.log('Login successful:', { userId, token, newUser });
+    console.log('Manual login successful:', { userId, token, newUser });
     
     // Create user data object
     const userData = {
@@ -43,10 +81,13 @@ const LoginPage = () => {
       <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-primary-600 via-primary-700 to-secondary-600 relative overflow-hidden">
         {/* Background Pattern */}
         <div className="absolute inset-0 opacity-10">
-          <div className="absolute inset-0" style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Ccircle cx='30' cy='30' r='2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-            backgroundRepeat: 'repeat'
-          }}></div>
+          <div 
+            className="absolute inset-0" 
+            style={{
+              backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Ccircle cx='30' cy='30' r='2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+              backgroundRepeat: 'repeat'
+            }}
+          ></div>
         </div>
 
         {/* Content */}
@@ -74,9 +115,28 @@ const LoginPage = () => {
             </h1>
 
             <p className="text-xl text-primary-100 mb-12 leading-relaxed">
-              Transform your business with AI-powered marketing automation, 
-              advanced analytics, and seamless customer management.
+              Transform your business with AI-powered marketing automation, advanced analytics, and seamless customer management.
             </p>
+
+            {/* Auto-signin notification */}
+            {AUTO_SIGNIN_CONFIG.enabled && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.5 }}
+                className="mb-8 p-4 bg-white/10 rounded-xl backdrop-blur-sm border border-white/20"
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                    <SafeIcon icon={FiZap} className="w-4 h-4 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-white">Auto-Signin Enabled</h3>
+                    <p className="text-primary-100 text-sm">Signing you in automatically with demo credentials...</p>
+                  </div>
+                </div>
+              </motion.div>
+            )}
 
             {/* Features */}
             <div className="space-y-6">
@@ -142,6 +202,15 @@ const LoginPage = () => {
             <p className="text-gray-600">
               Enter your credentials to access your dashboard
             </p>
+            
+            {/* Auto-signin status for mobile */}
+            {AUTO_SIGNIN_CONFIG.enabled && (
+              <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
+                <p className="text-green-700 text-sm font-medium">
+                  🚀 Auto-signin enabled - Logging you in automatically!
+                </p>
+              </div>
+            )}
           </motion.div>
 
           {/* Quest Login Component */}
@@ -159,6 +228,25 @@ const LoginPage = () => {
               accent={questConfig.PRIMARY_COLOR}
             />
           </motion.div>
+
+          {/* Demo Credentials Display */}
+          {AUTO_SIGNIN_CONFIG.enabled && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.4 }}
+              className="mt-6 p-4 bg-gray-50 rounded-lg"
+            >
+              <h4 className="font-semibold text-gray-900 mb-2">Demo Credentials:</h4>
+              <div className="text-sm text-gray-600 space-y-1">
+                <p><strong>Email:</strong> {AUTO_SIGNIN_CONFIG.email}</p>
+                <p><strong>Password:</strong> {AUTO_SIGNIN_CONFIG.password}</p>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                Auto-signin will use these credentials automatically
+              </p>
+            </motion.div>
+          )}
 
           {/* Footer */}
           <motion.div
