@@ -4,7 +4,7 @@ import { Link, useLocation } from 'react-router-dom'
 import SafeIcon from '../common/SafeIcon'
 import * as FiIcons from 'react-icons/fi'
 
-const { FiHome, FiTrendingUp, FiMail, FiZap, FiPackage, FiBarChart3, FiSettings, FiMenu, FiX, FiGlobe, FiCreditCard, FiUsers, FiTicket, FiPlay, FiUserPlus, FiFolder, FiCheckSquare, FiTarget, FiLayers, FiFileText, FiEdit3, FiSend } = FiIcons
+const { FiHome, FiTrendingUp, FiMail, FiZap, FiPackage, FiBarChart3, FiSettings, FiMenu, FiX, FiGlobe, FiCreditCard, FiUsers, FiTicket, FiPlay, FiUserPlus, FiFolder, FiCheckSquare, FiTarget, FiLayers, FiFileText, FiEdit3, FiActivity } = FiIcons
 
 const Sidebar = ({ collapsed, onToggle }) => {
   const location = useLocation()
@@ -12,7 +12,7 @@ const Sidebar = ({ collapsed, onToggle }) => {
   const menuItems = [
     { path: '/', icon: FiHome, label: 'Dashboard', color: 'text-cyan-400' },
     { path: '/get-started', icon: FiPlay, label: 'Get Started', color: 'text-green-400' },
-    { path: '/outreach', icon: FiSend, label: 'B2B Outreach', color: 'text-purple-400' },
+    { path: '/website-tracking', icon: FiActivity, label: 'Website Tracking', color: 'text-cyan-400' },
     { path: '/client-portal', icon: FiUsers, label: 'Client Portal', color: 'text-blue-400' },
     { path: '/proposals', icon: FiFileText, label: 'Proposals', color: 'text-purple-400' },
     { path: '/contacts', icon: FiUserPlus, label: 'Contact Manager', color: 'text-blue-400' },
@@ -60,7 +60,7 @@ const Sidebar = ({ collapsed, onToggle }) => {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-4">
+      <nav className="flex-1 p-4 overflow-y-auto">
         <ul className="space-y-2">
           {menuItems.map((item) => {
             const isActive = location.pathname === item.path
@@ -79,7 +79,7 @@ const Sidebar = ({ collapsed, onToggle }) => {
                     <motion.span
                       initial={{ opacity: 0, x: -10 }}
                       animate={{ opacity: 1, x: 0 }}
-                      className="font-medium"
+                      className="font-medium text-sm"
                     >
                       {item.label}
                     </motion.span>

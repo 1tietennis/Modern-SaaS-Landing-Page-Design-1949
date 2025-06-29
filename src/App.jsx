@@ -10,7 +10,7 @@ import OnboardingPage from './components/auth/OnboardingPage'
 import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
 import GetStarted from './pages/GetStarted'
-import Outreach from './pages/Outreach'
+import WebsiteTracking from './pages/WebsiteTracking'
 import ClientPortalPage from './pages/ClientPortal'
 import Proposals from './pages/Proposals'
 import Contacts from './pages/Contacts'
@@ -59,7 +59,7 @@ function App() {
                 <Routes>
                   <Route path="/" element={<Dashboard />} />
                   <Route path="/get-started" element={<GetStarted />} />
-                  <Route path="/outreach" element={<Outreach />} />
+                  <Route path="/website-tracking" element={<WebsiteTracking />} />
                   <Route path="/client-portal" element={<ClientPortalPage />} />
                   <Route path="/proposals" element={<Proposals />} />
                   <Route path="/contacts" element={<Contacts />} />
